@@ -31,7 +31,10 @@ def add_product_cart(product: dict, access_token: str):
             'quantity': 1,
         },
     }
-    response_add_product_to_cart = requests.post('https://api.moltin.com/v2/carts/1/items', headers=headers, json=json_data)
+    response_add_product_to_cart = requests.post('https://api.moltin.com/v2/carts/1/items',
+                                                 headers=headers,
+                                                 json=json_data
+                                                 )
     response_add_product_to_cart.raise_for_status()
 
 
