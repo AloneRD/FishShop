@@ -5,6 +5,7 @@ import logging
 import redis
 
 from telegram.ext import Filters, Updater
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 _database = None
@@ -14,10 +15,16 @@ def start(bot, update):
     """
     Хэндлер для состояния START.
 
-    Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO.
-    Теперь в ответ на его команды будет запускаеться хэндлер echo.
+    Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO..
     """
-    update.message.reply_text(text='Привет!')
+    keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
+                 InlineKeyboardButton("Option 2", callback_data='2')],
+
+                [InlineKeyboardButton("Option 3", callback_data='3')]]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text(text='Добро пожаловать к нам в магазин!!',
+                              reply_markup=reply_markup)
     return "ECHO"
 
 
