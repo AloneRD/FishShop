@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
 import os
 import api
-import logging
 import redis
+
+from dotenv import load_dotenv
+from functools import partial
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -11,17 +12,14 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 _database = None
 
 
-def start(bot, update):
+def start(bot, update, access_token_cms):
     """
     Хэндлер для состояния START.
 
     Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO..
     """
-    keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
-                 InlineKeyboardButton("Option 2", callback_data='2')],
-
-                [InlineKeyboardButton("Option 3", callback_data='3')]]
-
+    products = api.get_products(access_token_cms)['data']
+    keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(text='Добро пожаловать к нам в магазин!!',
                               reply_markup=reply_markup)
@@ -40,7 +38,7 @@ def echo(bot, update):
     return "ECHO"
 
 
-def handle_users_reply(bot, update):
+def handle_users_reply(bot, update, access_token_cms):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
@@ -68,7 +66,7 @@ def handle_users_reply(bot, update):
         user_state = db.get(chat_id).decode("utf-8")
 
     states_functions = {
-        'START': start,
+        'START': partial(start, access_token_cms=access_token_cms),
         'ECHO': echo
     }
     state_handler = states_functions[user_state]
@@ -98,9 +96,7 @@ def main():
     load_dotenv()
 
     client_id = os.getenv("CLIENT_ID")
-
-    access_token = api.get_access_token(client_id)
-    products = api.get_products(access_token)
+    access_token_cms = api.get_access_token(client_id)
     # api.add_product_cart(dict(products['data'][0]), access_token)
     # api.get_cart(1, access_token)
 
@@ -109,9 +105,9 @@ def main():
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))
-    dispatcher.add_handler(MessageHandler(Filters.text, handle_users_reply))
-    dispatcher.add_handler(CommandHandler('start', handle_users_reply))
+    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, access_token_cms=access_token_cms)))
+    dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, access_token_cms=access_token_cms)))
+    dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, access_token_cms=access_token_cms)))
 
     updater.start_polling()
 
