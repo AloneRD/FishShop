@@ -1,4 +1,6 @@
+from math import prod
 import os
+from pydoc import doc
 import api
 import redis
 
@@ -12,33 +14,36 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 _database = None
 
 
-def start(bot, update, access_token_cms):
+def start(bot, update, user_data, access_token_cms):
     """
     Хэндлер для состояния START.
 
     Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO..
     """
     products = api.get_products(access_token_cms)['data']
+    user_data['products'] = products
     keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text(text='Добро пожаловать к нам в магазин!!',
                               reply_markup=reply_markup)
-    return "ECHO"
+    return "HANDLE_MENU"
 
 
-def echo(bot, update):
-    """
-    Хэндлер для состояния ECHO.
+def handle_menu(bot, update, user_data, access_token_cms):
+    
+    product_id = update.callback_query.data
+    print(product_id)
+    response_get_product = api.get_product(access_token_cms, product_id)
+    product = response_get_product['data']
+    text_blocks = [f"<b>{product['name']}</b>\n",
+                   f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
+                   f"{product['description']}\n"]
+    update.callback_query.message.reply_html('\n'.join(text_blocks))
 
-    Бот отвечает пользователю тем же, что пользователь ему написал.
-    Оставляет пользователя в состоянии ECHO.
-    """
-    users_reply = update.message.text
-    update.message.reply_text(users_reply)
-    return "ECHO"
+    return "START"
 
 
-def handle_users_reply(bot, update, access_token_cms):
+def handle_users_reply(bot, update, user_data, access_token_cms):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
@@ -51,6 +56,7 @@ def handle_users_reply(bot, update, access_token_cms):
     поэтому по этой фразе выставляется стартовое состояние.
     Если пользователь захочет начать общение с ботом заново, он также может воспользоваться этой командой.
     """
+
     db = get_database_connection()
     if update.message:
         user_reply = update.message.text
@@ -67,14 +73,14 @@ def handle_users_reply(bot, update, access_token_cms):
 
     states_functions = {
         'START': partial(start, access_token_cms=access_token_cms),
-        'ECHO': echo
+        'HANDLE_MENU': partial(handle_menu, access_token_cms=access_token_cms)
     }
     state_handler = states_functions[user_state]
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
     # Оставляю этот try...except, чтобы код не падал молча.
     # Этот фрагмент можно переписать.
     try:
-        next_state = state_handler(bot, update)
+        next_state = state_handler(bot, update, user_data)
         db.set(chat_id, next_state)
     except Exception as err:
         print(err)
@@ -105,9 +111,9 @@ def main():
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, access_token_cms=access_token_cms)))
-    dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, access_token_cms=access_token_cms)))
-    dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, access_token_cms=access_token_cms)))
+    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
+    dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
+    dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
 
     updater.start_polling()
 
