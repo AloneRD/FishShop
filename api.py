@@ -31,6 +31,15 @@ def get_product(access_token: str, id: str) -> dict:
     return response_products.json()
 
 
+def get_image_product(access_token: str, id_image: str) -> dict:
+    headers = {'Authorization': access_token}
+    response_products = requests.get(f'https://api.moltin.com/v2/files/{id_image}',
+                                     headers=headers
+                                     )
+    response_products.raise_for_status()
+    return response_products.json()
+
+
 def add_product_cart(product: dict, access_token: str):
     headers = {'Authorization': access_token}
     json_data = {
