@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from functools import partial
 
 from telegram.ext import Filters, Updater
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 _database = None
@@ -30,15 +30,21 @@ def start(bot, update, user_data, access_token_cms):
 
 
 def handle_menu(bot, update, user_data, access_token_cms):
-    
+
     product_id = update.callback_query.data
-    print(product_id)
     response_get_product = api.get_product(access_token_cms, product_id)
     product = response_get_product['data']
-    text_blocks = [f"<b>{product['name']}</b>\n",
+    product_image_id = product['relationships']['main_image']['data']['id']
+    image = api.get_image_product(access_token_cms, product_image_id)
+    image_link = image['data']['link']['href']
+    text_blocks = [f"{product['name']}\n",
                    f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
                    f"{product['description']}\n"]
-    update.callback_query.message.reply_html('\n'.join(text_blocks))
+    media = [
+        InputMediaPhoto(media=image_link, caption='\n'.join(text_blocks))
+    ]
+    chat_id = update.callback_query.message['chat']['id']
+    bot.send_media_group(chat_id=chat_id, media=media)
 
     return "START"
 
