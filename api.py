@@ -1,3 +1,4 @@
+from itertools import product
 import requests
 
 
@@ -21,9 +22,17 @@ def get_products(access_token: str) -> dict:
     return response_products.json()
 
 
+def get_product(access_token: str, id: str) -> dict:
+    headers = {'Authorization': access_token}
+    response_products = requests.get(f'https://api.moltin.com/v2/products/{id}',
+                                     headers=headers
+                                     )
+    response_products.raise_for_status()
+    return response_products.json()
+
+
 def add_product_cart(product: dict, access_token: str):
     headers = {'Authorization': access_token}
-    print(product['id'])
     json_data = {
         'data': {
             'id': product['id'],
