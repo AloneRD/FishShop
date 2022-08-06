@@ -43,8 +43,11 @@ def handle_menu(bot, update, user_data, access_token_cms):
     media = [
         InputMediaPhoto(media=image_link, caption='\n'.join(text_blocks))
     ]
-    chat_id = update.callback_query.message['chat']['id']
+    message_id = update.callback_query.message.message_id
+    chat_id = update.callback_query.message.chat_id
+
     bot.send_media_group(chat_id=chat_id, media=media)
+    bot.delete_message(chat_id=chat_id, message_id=message_id)
 
     return "START"
 
