@@ -30,26 +30,42 @@ def start(bot, update, user_data, access_token_cms):
 
 
 def handle_menu(bot, update, user_data, access_token_cms):
-
+    print(update.callback_query.data)
     product_id = update.callback_query.data
     response_get_product = api.get_product(access_token_cms, product_id)
     product = response_get_product['data']
     product_image_id = product['relationships']['main_image']['data']['id']
     image = api.get_image_product(access_token_cms, product_image_id)
     image_link = image['data']['link']['href']
+
+    keyboard = [[InlineKeyboardButton('Назад', callback_data='back')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     text_blocks = [f"{product['name']}\n",
                    f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
                    f"{product['description']}\n"]
-    media = [
-        InputMediaPhoto(media=image_link, caption='\n'.join(text_blocks))
-    ]
+
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
 
-    bot.send_media_group(chat_id=chat_id, media=media)
+    bot.send_photo(chat_id=chat_id, photo=image_link, caption='\n'.join(text_blocks), reply_markup=reply_markup)
     bot.delete_message(chat_id=chat_id, message_id=message_id)
 
-    return "START"
+    return "HANDLE_DESCRIPTION"
+
+
+def handle_description(bot, update, user_data, access_token_cms):
+    message_id = update.callback_query.message.message_id
+    chat_id = update.callback_query.message.chat_id
+    user_reply = update.callback_query.data
+    if user_reply == 'back':
+        products = user_data['products']
+        keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        bot.send_message(chat_id=chat_id, text='Вы вернулись в главное меню',
+                         reply_markup=reply_markup)
+        bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return "HANDLE_MENU"
 
 
 def handle_users_reply(bot, update, user_data, access_token_cms):
@@ -82,9 +98,11 @@ def handle_users_reply(bot, update, user_data, access_token_cms):
 
     states_functions = {
         'START': partial(start, access_token_cms=access_token_cms),
-        'HANDLE_MENU': partial(handle_menu, access_token_cms=access_token_cms)
+        'HANDLE_MENU': partial(handle_menu, access_token_cms=access_token_cms),
+        'HANDLE_DESCRIPTION': partial(handle_description, access_token_cms=access_token_cms)
     }
     state_handler = states_functions[user_state]
+    print(state_handler)
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
     # Оставляю этот try...except, чтобы код не падал молча.
     # Этот фрагмент можно переписать.
