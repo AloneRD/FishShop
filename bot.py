@@ -3,6 +3,7 @@ import os
 from pydoc import doc
 import api
 import redis
+import re
 
 from dotenv import load_dotenv
 from functools import partial
@@ -34,11 +35,19 @@ def handle_menu(bot, update, user_data, access_token_cms):
     product_id = update.callback_query.data
     response_get_product = api.get_product(access_token_cms, product_id)
     product = response_get_product['data']
+    user_data['product'] = product
     product_image_id = product['relationships']['main_image']['data']['id']
     image = api.get_image_product(access_token_cms, product_image_id)
     image_link = image['data']['link']['href']
 
-    keyboard = [[InlineKeyboardButton('Назад', callback_data='back')]]
+    keyboard = [
+        [InlineKeyboardButton('Назад', callback_data='back')],
+        [
+            InlineKeyboardButton('1кг', callback_data='1kg'),
+            InlineKeyboardButton('5кг', callback_data='5kg'),
+            InlineKeyboardButton('10кг', callback_data='10kg')
+        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     text_blocks = [f"{product['name']}\n",
@@ -66,6 +75,10 @@ def handle_description(bot, update, user_data, access_token_cms):
                          reply_markup=reply_markup)
         bot.delete_message(chat_id=chat_id, message_id=message_id)
         return "HANDLE_MENU"
+    quantity = int(re.match(r'(\d)', user_reply).group(1))
+    api.add_product_cart(user_data['product'], access_token_cms, quantity, chat_id)
+
+    print(api.get_cart(chat_id, access_token_cms))
 
 
 def handle_users_reply(bot, update, user_data, access_token_cms):
