@@ -40,16 +40,16 @@ def get_image_product(access_token: str, id_image: str) -> dict:
     return response_products.json()
 
 
-def add_product_cart(product: dict, access_token: str):
+def add_product_cart(product: dict, access_token: str, quantity:int, cart_id:str):
     headers = {'Authorization': access_token}
     json_data = {
         'data': {
             'id': product['id'],
             'type': 'cart_item',
-            'quantity': 1,
+            'quantity': quantity,
         },
     }
-    response_add_product_to_cart = requests.post('https://api.moltin.com/v2/carts/1/items',
+    response_add_product_to_cart = requests.post(f'https://api.moltin.com/v2/carts/{cart_id}/items',
                                                  headers=headers,
                                                  json=json_data
                                                  )
