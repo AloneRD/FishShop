@@ -6,60 +6,43 @@ import redis
 import re
 
 from dotenv import load_dotenv
-from functools import partial
+from functools import partial, total_ordering
 
 from telegram.ext import Filters, Updater
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 _database = None
+
+BUTTON_CART = InlineKeyboardButton('Корзина', callback_data='cart')
+BUTTON_BACK = InlineKeyboardButton('Назад', callback_data='back')
 
 
 def start(bot, update, user_data, access_token_cms):
     """
     Хэндлер для состояния START.
-
-    Бот отвечает пользователю фразой "Привет!" и переводит его в состояние ECHO..
     """
     products = api.get_products(access_token_cms)['data']
     user_data['products'] = products
     keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+
     update.message.reply_text(text='Добро пожаловать к нам в магазин!!',
                               reply_markup=reply_markup)
-    return "HANDLE_MENU"
+    return "HANDLE_DESCRIPTION"
 
 
 def handle_menu(bot, update, user_data, access_token_cms):
-    print(update.callback_query.data)
-    product_id = update.callback_query.data
-    response_get_product = api.get_product(access_token_cms, product_id)
-    product = response_get_product['data']
-    user_data['product'] = product
-    product_image_id = product['relationships']['main_image']['data']['id']
-    image = api.get_image_product(access_token_cms, product_image_id)
-    image_link = image['data']['link']['href']
-
-    keyboard = [
-        [InlineKeyboardButton('Назад', callback_data='back')],
-        [
-            InlineKeyboardButton('1кг', callback_data='1kg'),
-            InlineKeyboardButton('5кг', callback_data='5kg'),
-            InlineKeyboardButton('10кг', callback_data='10kg')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    text_blocks = [f"{product['name']}\n",
-                   f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
-                   f"{product['description']}\n"]
-
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
 
-    bot.send_photo(chat_id=chat_id, photo=image_link, caption='\n'.join(text_blocks), reply_markup=reply_markup)
-    bot.delete_message(chat_id=chat_id, message_id=message_id)
+    products = api.get_products(access_token_cms)['data']
+    user_data['products'] = products
+    keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products], [BUTTON_CART]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
+    update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
+    bot.delete_message(chat_id=chat_id, message_id=message_id)
     return "HANDLE_DESCRIPTION"
 
 
@@ -67,18 +50,81 @@ def handle_description(bot, update, user_data, access_token_cms):
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
     user_reply = update.callback_query.data
-    if user_reply == 'back':
-        products = user_data['products']
-        keyboard = [[InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=chat_id, text='Вы вернулись в главное меню',
-                         reply_markup=reply_markup)
-        bot.delete_message(chat_id=chat_id, message_id=message_id)
-        return "HANDLE_MENU"
-    quantity = int(re.match(r'(\d)', user_reply).group(1))
-    api.add_product_cart(user_data['product'], access_token_cms, quantity, chat_id)
+    if 'kg' in user_reply:
+        quantity = int(re.match(r'(\d)', user_reply).group(1))
+        api.add_product_cart(user_data['product'],
+                             access_token_cms,
+                             quantity, chat_id)
+        return "HANDLE_DESCRIPTION"
+    elif user_reply == 'cart':
+        view_cart(bot, update, user_data, access_token_cms)
+        return 'CART'
+    elif user_reply == 'back':
+        handle_menu(bot, update, user_data, access_token_cms)
+        "HANDLE_DESCRIPTION"
+    product_id = user_reply
+    response_get_product = api.get_product(access_token_cms, product_id)
+    product = response_get_product['data']
+    user_data['product'] = product
 
-    print(api.get_cart(chat_id, access_token_cms))
+    product_image_id = product['relationships']['main_image']['data']['id']
+    image = api.get_image_product(access_token_cms, product_image_id)
+    image_link = image['data']['link']['href']
+
+    keyboard = [
+        [BUTTON_BACK],
+        [
+            InlineKeyboardButton('1кг', callback_data='1kg'),
+            InlineKeyboardButton('5кг', callback_data='5kg'),
+            InlineKeyboardButton('10кг', callback_data='10kg')
+        ],
+        [BUTTON_CART]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    text_blocks = [f"{product['name']}\n",
+                   f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
+                   f"{product['description']}\n"]
+
+    bot.send_photo(chat_id=chat_id,
+                   photo=image_link,
+                   caption='\n'.join(text_blocks),
+                   reply_markup=reply_markup)
+    bot.delete_message(chat_id=chat_id, message_id=message_id)
+
+    return "HANDLE_DESCRIPTION"
+
+
+def view_cart(bot, update, user_data, access_token_cms):
+    user_reply = update.callback_query.data
+
+    if user_reply == 'back' or user_reply == 'handle_menu':
+        handle_menu(bot, update, user_data, access_token_cms)
+        return "HANDLE_DESCRIPTION"
+    message_id = update.callback_query.message.message_id
+    chat_id = update.callback_query.message.chat_id
+
+    keyboard = [[InlineKeyboardButton('В меню', callback_data='handle_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    cart = api.get_cart(chat_id, access_token_cms)
+    total_price_cart = api.get_cart_total(chat_id, access_token_cms)
+    products_cart = cart['data']
+    message_block = []
+    for product in products_cart:
+        product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
+        product_price_cart = product['meta']['display_price']['with_tax']['value']['formatted']
+        message = f'{product["name"]} \n' \
+                  + f'{product["description"]}\n' \
+                  + f'{product_price} per kg\n' \
+                  + f'{product["quantity"]}kg in cart for {product_price_cart}\n\n' \
+                  + f'Total: {total_price_cart}\n\n\n\n\n'
+        message_block.append(message)
+    bot.send_message(chat_id=chat_id,
+                     text='\n'.join(message_block),
+                     reply_markup=reply_markup)
+    bot.delete_message(chat_id=chat_id, message_id=message_id)
+    return "CART"
 
 
 def handle_users_reply(bot, update, user_data, access_token_cms):
@@ -112,10 +158,10 @@ def handle_users_reply(bot, update, user_data, access_token_cms):
     states_functions = {
         'START': partial(start, access_token_cms=access_token_cms),
         'HANDLE_MENU': partial(handle_menu, access_token_cms=access_token_cms),
-        'HANDLE_DESCRIPTION': partial(handle_description, access_token_cms=access_token_cms)
+        'HANDLE_DESCRIPTION': partial(handle_description, access_token_cms=access_token_cms),
+        'CART': partial(view_cart, access_token_cms=access_token_cms)
     }
     state_handler = states_functions[user_state]
-    print(state_handler)
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
     # Оставляю этот try...except, чтобы код не падал молча.
     # Этот фрагмент можно переписать.
@@ -134,7 +180,10 @@ def get_database_connection():
     if _database is None:
         password_redis_db = os.getenv("REDIS_DB")
         redis_host = os.getenv("REDIS_HOST")
-        _database = redis.Redis(host=redis_host, port=12655, db=0, password=password_redis_db)
+        _database = redis.Redis(host=redis_host,
+                                port=12655,
+                                db=0,
+                                password=password_redis_db)
     return _database
 
 
@@ -143,15 +192,13 @@ def main():
 
     client_id = os.getenv("CLIENT_ID")
     access_token_cms = api.get_access_token(client_id)
-    # api.add_product_cart(dict(products['data'][0]), access_token)
-    # api.get_cart(1, access_token)
 
     token = os.getenv("TG_TOKEN")
 
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
+    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply,access_token_cms=access_token_cms), pass_user_data=True))
     dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
     dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
 
