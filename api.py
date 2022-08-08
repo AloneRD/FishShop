@@ -60,3 +60,10 @@ def get_cart(cart_id: str, access_token: str) -> dict:
     headers = {'Authorization': access_token}
     response_get_cart = requests.get(f'https://api.moltin.com/v2/carts/{cart_id}/items', headers=headers)
     return response_get_cart.json()
+
+
+def get_cart_total(cart_id: str, access_token: str) -> str:
+    headers = {'Authorization': access_token}
+    response_get_cart = requests.get(f'https://api.moltin.com/v2/carts/{cart_id}', headers=headers).json()
+    total_cart = response_get_cart['data']['meta']['display_price']['with_tax']['formatted']
+    return total_cart
