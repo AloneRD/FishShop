@@ -1,12 +1,10 @@
-from math import prod
 import os
-from pydoc import doc
 import api
 import redis
 import re
 
 from dotenv import load_dotenv
-from functools import partial, total_ordering
+from functools import partial
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -95,23 +93,14 @@ def handle_description(bot, update, user_data, access_token_cms):
     return "HANDLE_DESCRIPTION"
 
 
-def view_cart(bot, update, user_data, access_token_cms):
-    user_reply = update.callback_query.data
-
-    if user_reply == 'back' or user_reply == 'handle_menu':
-        handle_menu(bot, update, user_data, access_token_cms)
-        return "HANDLE_DESCRIPTION"
-    message_id = update.callback_query.message.message_id
-    chat_id = update.callback_query.message.chat_id
-
+def generate_cart(chat_id, access_token_cms):
     keyboard = [[InlineKeyboardButton('В меню', callback_data='handle_menu')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     cart = api.get_cart(chat_id, access_token_cms)
     total_price_cart = api.get_cart_total(chat_id, access_token_cms)
     products_cart = cart['data']
     message_block = []
     for product in products_cart:
+        print(product)
         product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
         product_price_cart = product['meta']['display_price']['with_tax']['value']['formatted']
         message = f'{product["name"]} \n' \
@@ -120,6 +109,34 @@ def view_cart(bot, update, user_data, access_token_cms):
                   + f'{product["quantity"]}kg in cart for {product_price_cart}\n\n' \
                   + f'Total: {total_price_cart}\n\n\n\n\n'
         message_block.append(message)
+        product_delete_button = [InlineKeyboardButton(f'Убрать из корзины {product["name"]}', callback_data=f'delete_{product["id"]}')]
+        keyboard.append(product_delete_button)
+    if not message_block:
+        message_block = ["Ваша корзина пуста"]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return message_block, reply_markup
+
+
+def view_cart(bot, update, user_data, access_token_cms):
+    user_reply = update.callback_query.data
+    message_id = update.callback_query.message.message_id
+    chat_id = update.callback_query.message.chat_id
+
+    if user_reply == 'back' or user_reply == 'handle_menu':
+        handle_menu(bot, update, user_data, access_token_cms)
+        return "HANDLE_DESCRIPTION"
+    elif 'delete' in user_reply:
+        product_id = re.search(r'delete_(.*)', user_reply).group(1)
+        api.remove_product_from_cart(chat_id, product_id, access_token_cms)
+        message_block, reply_markup = generate_cart(chat_id, access_token_cms)
+        bot.send_message(chat_id=chat_id,
+                         text='\n'.join(message_block),
+                         reply_markup=reply_markup
+                         )
+        bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return "CART"
+
+    message_block, reply_markup = generate_cart(chat_id, access_token_cms)
     bot.send_message(chat_id=chat_id,
                      text='\n'.join(message_block),
                      reply_markup=reply_markup)
@@ -198,7 +215,7 @@ def main():
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply,access_token_cms=access_token_cms), pass_user_data=True))
+    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
     dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
     dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, access_token_cms=access_token_cms), pass_user_data=True))
 
