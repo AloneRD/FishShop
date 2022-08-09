@@ -94,13 +94,12 @@ def handle_description(bot, update, user_data, access_token_cms):
 
 
 def generate_cart(chat_id, access_token_cms):
-    keyboard = [[InlineKeyboardButton('В меню', callback_data='handle_menu')]]
+    keyboard = [[InlineKeyboardButton('В меню', callback_data='handle_menu'),InlineKeyboardButton('Оплатить', callback_data='pay')]]
     cart = api.get_cart(chat_id, access_token_cms)
     total_price_cart = api.get_cart_total(chat_id, access_token_cms)
     products_cart = cart['data']
     message_block = []
     for product in products_cart:
-        print(product)
         product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
         product_price_cart = product['meta']['display_price']['with_tax']['value']['formatted']
         message = f'{product["name"]} \n' \
@@ -135,6 +134,9 @@ def view_cart(bot, update, user_data, access_token_cms):
                          )
         bot.delete_message(chat_id=chat_id, message_id=message_id)
         return "CART"
+    elif user_reply == 'pay':
+        bot.send_message(chat_id=chat_id, text='Пришлите мне свой e-mail')
+        return "WAITING_EMAIL"
 
     message_block, reply_markup = generate_cart(chat_id, access_token_cms)
     bot.send_message(chat_id=chat_id,
@@ -142,6 +144,14 @@ def view_cart(bot, update, user_data, access_token_cms):
                      reply_markup=reply_markup)
     bot.delete_message(chat_id=chat_id, message_id=message_id)
     return "CART"
+
+
+def waiting_email(bot, update, user_data, access_token_cms):
+    email = update.message.text
+    keyboard = [[InlineKeyboardButton('В меню', callback_data='handle_menu')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    bot.send_message(chat_id=update.message.chat_id, text=f'{email} сохранен', reply_markup = reply_markup)
+    return 'HANDLE_MENU'
 
 
 def handle_users_reply(bot, update, user_data, access_token_cms):
@@ -176,7 +186,8 @@ def handle_users_reply(bot, update, user_data, access_token_cms):
         'START': partial(start, access_token_cms=access_token_cms),
         'HANDLE_MENU': partial(handle_menu, access_token_cms=access_token_cms),
         'HANDLE_DESCRIPTION': partial(handle_description, access_token_cms=access_token_cms),
-        'CART': partial(view_cart, access_token_cms=access_token_cms)
+        'CART': partial(view_cart, access_token_cms=access_token_cms),
+        'WAITING_EMAIL': partial(waiting_email, access_token_cms=access_token_cms)
     }
     state_handler = states_functions[user_state]
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
