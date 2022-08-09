@@ -1,4 +1,3 @@
-from itertools import product
 import requests
 
 
@@ -40,7 +39,7 @@ def get_image_product(access_token: str, id_image: str) -> dict:
     return response_products.json()
 
 
-def add_product_cart(product: dict, access_token: str, quantity:int, cart_id:str):
+def add_product_cart(product: dict, access_token: str, quantity: int, cart_id: str):
     headers = {'Authorization': access_token}
     json_data = {
         'data': {
@@ -53,6 +52,14 @@ def add_product_cart(product: dict, access_token: str, quantity:int, cart_id:str
                                                  headers=headers,
                                                  json=json_data
                                                  )
+    response_add_product_to_cart.raise_for_status()
+
+
+def remove_product_from_cart(cart_id: str, product_id: str, access_token: str):
+    headers = {'Authorization': access_token}
+    response_add_product_to_cart = requests.delete(f'https://api.moltin.com/v2/carts/{cart_id}/items/{product_id}',
+                                                   headers=headers,
+                                                   )
     response_add_product_to_cart.raise_for_status()
 
 
