@@ -1,1 +1,1 @@
-bot: python3 bot.py
+bot_shop: python3 bot.py
