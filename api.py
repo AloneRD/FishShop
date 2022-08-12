@@ -75,6 +75,7 @@ def get_cart(cart_id: str, access_token: str) -> dict:
         f'https://api.moltin.com/v2/carts/{cart_id}/items',
         headers=headers
         )
+    response_get_cart.raise_for_status()
     return response_get_cart.json()
 
 
@@ -83,8 +84,10 @@ def get_cart_total(cart_id: str, access_token: str) -> str:
     response_get_cart = requests.get(
         f'https://api.moltin.com/v2/carts/{cart_id}',
         headers=headers
-        ).json()
-    total_cart = response_get_cart['data']['meta']['display_price']['with_tax']['formatted']
+        )
+    response_get_cart.raise_for_status()
+    cart = response_get_cart.json()
+    total_cart = cart['data']['meta']['display_price']['with_tax']['formatted']
     return total_cart
 
 
