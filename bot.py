@@ -5,6 +5,8 @@ import re
 
 from dotenv import load_dotenv
 from functools import partial
+from textwrap import dedent
+from datetime import datetime
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,11 +18,11 @@ BUTTON_CART = InlineKeyboardButton('Корзина', callback_data='cart')
 BUTTON_BACK = InlineKeyboardButton('Назад', callback_data='back')
 
 
-def start(bot, update, user_data, access_token_cms):
+def start(bot, update, user_data, client_id):
     """
     Хэндлер для состояния START.
     """
-    products = api.get_products(access_token_cms)['data']
+    products = api.get_products(client_id)['data']
     user_data['products'] = products
     keyboard = [
         [InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products]
@@ -34,11 +36,11 @@ def start(bot, update, user_data, access_token_cms):
     return "HANDLE_DESCRIPTION"
 
 
-def handle_menu(bot, update, user_data, access_token_cms):
+def handle_menu(bot, update, user_data, client_id):
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
 
-    products = api.get_products(access_token_cms)['data']
+    products = api.get_products(client_id)['data']
     user_data['products'] = products
     keyboard = [
         [InlineKeyboardButton(product['name'], callback_data=product['id']) for product in products],
@@ -51,29 +53,29 @@ def handle_menu(bot, update, user_data, access_token_cms):
     return "HANDLE_DESCRIPTION"
 
 
-def handle_description(bot, update, user_data, access_token_cms):
+def handle_description(bot, update, user_data, client_id):
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
     user_reply = update.callback_query.data
     if 'kg' in user_reply:
         quantity = int(re.match(r'(\d)', user_reply).group(1))
         api.add_product_cart(user_data['product'],
-                             access_token_cms,
+                             client_id,
                              quantity, chat_id)
         return "HANDLE_DESCRIPTION"
     elif user_reply == 'cart':
-        view_cart(bot, update, user_data, access_token_cms)
+        view_cart(bot, update, user_data, client_id)
         return 'CART'
     elif user_reply == 'back':
-        handle_menu(bot, update, user_data, access_token_cms)
+        handle_menu(bot, update, user_data, client_id)
         "HANDLE_DESCRIPTION"
     product_id = user_reply
-    response_get_product = api.get_product(access_token_cms, product_id)
+    response_get_product = api.get_product(client_id, product_id)
     product = response_get_product['data']
     user_data['product'] = product
 
     product_image_id = product['relationships']['main_image']['data']['id']
-    image = api.get_image_product(access_token_cms, product_image_id)
+    image = api.get_image_product(client_id, product_image_id)
     image_link = image['data']['link']['href']
 
     keyboard = [
@@ -87,14 +89,15 @@ def handle_description(bot, update, user_data, access_token_cms):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    text_blocks = [f"{product['name']}\n",
-                   f"{product['meta']['display_price']['with_tax']['formatted']} per kg \n",
-                   f"{product['description']}\n"]
+    text_blocks = f'''
+                    {product['name']}
+                    {product['meta']['display_price']['with_tax']['formatted']} per kg
+                    {product['description']}'''
 
     bot.send_photo(
         chat_id=chat_id,
         photo=image_link,
-        caption='\n'.join(text_blocks),
+        caption=dedent(text_blocks),
         reply_markup=reply_markup
         )
     bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -102,26 +105,31 @@ def handle_description(bot, update, user_data, access_token_cms):
     return "HANDLE_DESCRIPTION"
 
 
-def generate_cart(chat_id, access_token_cms):
+def generate_cart(chat_id, client_id):
     keyboard = [
         [
             InlineKeyboardButton('В меню', callback_data='handle_menu'),
             InlineKeyboardButton('Оплатить', callback_data='pay')
             ]
         ]
-    cart = api.get_cart(chat_id, access_token_cms)
-    total_price_cart = api.get_cart_total(chat_id, access_token_cms)
+    cart = api.get_cart(chat_id, client_id)
+    total_price_cart = api.get_cart_total(chat_id, client_id)
     products_cart = cart['data']
     message_block = []
     for product in products_cart:
         product_price = product['meta']['display_price']['with_tax']['unit']['formatted']
         product_price_cart = product['meta']['display_price']['with_tax']['value']['formatted']
-        message = f'{product["name"]} \n'\
-                  + f'{product["description"]}\n'\
-                  + f'{product_price} per kg\n'\
-                  + f'{product["quantity"]}kg in cart for {product_price_cart}\n\n' \
-                  + f'Total: {total_price_cart}\n\n\n\n\n'
-        message_block.append(message)
+        message = f'''
+                    {product["name"]}
+
+                    {product["description"]}
+                    {product_price} per kg
+
+                    {product["quantity"]}kg in cart for {product_price_cart}
+
+                    Total: {total_price_cart}
+                       '''
+        message_block.append(dedent(message))
         product_delete_button = [
             InlineKeyboardButton(f'Убрать из корзины {product["name"]}', callback_data=f'delete_{product["id"]}')
             ]
@@ -132,18 +140,18 @@ def generate_cart(chat_id, access_token_cms):
     return message_block, reply_markup
 
 
-def view_cart(bot, update, user_data, access_token_cms):
+def view_cart(bot, update, user_data, client_id):
     user_reply = update.callback_query.data
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
 
     if user_reply == 'back' or user_reply == 'handle_menu':
-        handle_menu(bot, update, user_data, access_token_cms)
+        handle_menu(bot, update, user_data, client_id)
         return "HANDLE_DESCRIPTION"
     elif 'delete' in user_reply:
         product_id = re.search(r'delete_(.*)', user_reply).group(1)
-        api.remove_product_from_cart(chat_id, product_id, access_token_cms)
-        message_block, reply_markup = generate_cart(chat_id, access_token_cms)
+        api.remove_product_from_cart(chat_id, product_id, client_id)
+        message_block, reply_markup = generate_cart(chat_id, client_id)
         bot.send_message(
             chat_id=chat_id,
             text='\n'.join(message_block),
@@ -158,7 +166,7 @@ def view_cart(bot, update, user_data, access_token_cms):
             )
         return "WAITING_EMAIL"
 
-    message_block, reply_markup = generate_cart(chat_id, access_token_cms)
+    message_block, reply_markup = generate_cart(chat_id, client_id)
     bot.send_message(
         chat_id=chat_id,
         text='\n'.join(message_block),
@@ -168,14 +176,14 @@ def view_cart(bot, update, user_data, access_token_cms):
     return "CART"
 
 
-def waiting_email(bot, update, user_data, access_token_cms):
+def waiting_email(bot, update, user_data, client_id):
     email = update.message.text
     chat_id = update.message.chat_id
     keyboard = [
         [InlineKeyboardButton('В меню', callback_data='handle_menu')]
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    api.create_customer(str(chat_id), email, access_token_cms)
+    api.create_customer(str(chat_id), email, client_id)
     bot.send_message(
         chat_id=chat_id,
         text=f'{email} сохранен',
@@ -184,7 +192,7 @@ def waiting_email(bot, update, user_data, access_token_cms):
     return 'HANDLE_MENU'
 
 
-def handle_users_reply(bot, update, user_data, access_token_cms):
+def handle_users_reply(bot, update, user_data, client_id):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
@@ -215,23 +223,23 @@ def handle_users_reply(bot, update, user_data, access_token_cms):
     states_functions = {
         'START': partial(
             start,
-            access_token_cms=access_token_cms
+            client_id=client_id
             ),
         'HANDLE_MENU': partial(
             handle_menu,
-            access_token_cms=access_token_cms
+            client_id=client_id
             ),
         'HANDLE_DESCRIPTION': partial(
             handle_description,
-            access_token_cms=access_token_cms
+            client_id=client_id
             ),
         'CART': partial(
             view_cart,
-            access_token_cms=access_token_cms
+            client_id=client_id
         ),
         'WAITING_EMAIL': partial(
             waiting_email,
-            access_token_cms=access_token_cms)
+            client_id=client_id)
     }
     state_handler = states_functions[user_state]
     # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
@@ -250,12 +258,12 @@ def get_database_connection():
     """
     global _database
     if _database is None:
-        password_redis_db = os.getenv("REDIS_DB")
+        password_redis_db = os.getenv("REDIS_PASSWORD")
         redis_host = os.getenv("REDIS_HOST")
+        redis_port = os.getenv("REDIS_PORT")
         _database = redis.Redis(
             host=redis_host,
-            port=12655,
-            db=0,
+            port=redis_port,
             password=password_redis_db
             )
     return _database
@@ -263,9 +271,9 @@ def get_database_connection():
 
 def main():
     load_dotenv()
-
     client_id = os.getenv("CLIENT_ID")
-    access_token_cms = api.get_access_token(client_id)
+    if not os.getenv('MOLTIN_TOKEN_EXPIRES_TIME'):
+        os.environ.setdefault('MOLTIN_TOKEN_EXPIRES_TIME', str(datetime.now().timestamp()))
 
     token = os.getenv("TG_TOKEN")
 
@@ -274,21 +282,21 @@ def main():
 
     dispatcher.add_handler(
         CallbackQueryHandler(
-            partial(handle_users_reply, access_token_cms=access_token_cms),
+            partial(handle_users_reply, client_id=client_id),
             pass_user_data=True
             )
         )
     dispatcher.add_handler(
         MessageHandler(
             Filters.text,
-            partial(handle_users_reply, access_token_cms=access_token_cms),
+            partial(handle_users_reply, client_id=client_id),
             pass_user_data=True
             )
         )
     dispatcher.add_handler(
         CommandHandler(
             'start',
-            partial(handle_users_reply, access_token_cms=access_token_cms),
+            partial(handle_users_reply, client_id=client_id),
             pass_user_data=True
             )
         )
