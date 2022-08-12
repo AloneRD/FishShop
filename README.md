@@ -13,10 +13,11 @@
  ```
     CLIENT_ID=апра3jmMOxhZEXLAY5yhUMZ1MFOFTWQXCFPdIsv
     TG_TOKEN=536291вапрвар
-    REDIS_DB=fghfghjg6c55fJA
+    REDIS_PASSWORD=fghfghjg6c55fJA
     REDIS_HOST = fghjgfhjfghj
  ```
    - **CLIENT_ID** токен к CMS (В данном боте используется moltin)
    - **TG_TOKEN** токен к вашему телеграмм боту
-   - **REDIS_DB** ключ доступа к Redis
+   - **REDIS_PASSWORD** пароль Redis
+   - **REDIS_PORT** port Redis
 6. запустить бота **.\bot.py**
