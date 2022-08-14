@@ -12,15 +12,17 @@ def get_access_token(client_id: str) -> str:
             }
         )
     response_token_request.raise_for_status()
-    timestamp = float(datetime.now().timestamp())
-    os.environ.setdefault('ACCESS_TOKEN', response_token_request.json()['access_token'])
-    os.environ.setdefault('MOLTIN_TOKEN_EXPIRES_TIME', str(timestamp))
+    access_token = response_token_request.json()
+    os.environ.setdefault('MOLTIN_TOKEN_EXPIRES_TIME', str(access_token['expires']))
+    os.environ.setdefault('ACCESS_TOKEN', access_token['access_token'])
 
 
 def check_access_token(client_id: str):
     token_expires_time = os.getenv('MOLTIN_TOKEN_EXPIRES_TIME')
-    timestamp = float(datetime.now().timestamp())
-    if not token_expires_time or float(token_expires_time) < timestamp:
+    print(token_expires_time)
+    timestamp = int(datetime.now().timestamp())
+    print(timestamp)
+    if not token_expires_time or int(token_expires_time) < timestamp:
         get_access_token(client_id)
 
 

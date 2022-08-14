@@ -272,8 +272,6 @@ def get_database_connection():
 def main():
     load_dotenv()
     client_id = os.getenv("CLIENT_ID")
-    if not os.getenv('MOLTIN_TOKEN_EXPIRES_TIME'):
-        os.environ.setdefault('MOLTIN_TOKEN_EXPIRES_TIME', str(datetime.now().timestamp()))
 
     token = os.getenv("TG_TOKEN")
 
