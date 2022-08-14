@@ -6,7 +6,6 @@ import re
 from dotenv import load_dotenv
 from functools import partial
 from textwrap import dedent
-from datetime import datetime
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -58,7 +57,7 @@ def handle_description(bot, update, user_data, client_id):
     chat_id = update.callback_query.message.chat_id
     user_reply = update.callback_query.data
     if 'kg' in user_reply:
-        quantity = int(re.match(r'(\d)', user_reply).group(1))
+        quantity = int(re.match(r'(\d*)', user_reply).group(1))
         api.add_product_cart(user_data['product'],
                              client_id,
                              quantity, chat_id)
@@ -258,13 +257,13 @@ def get_database_connection():
     """
     global _database
     if _database is None:
-        password_redis_db = os.getenv("REDIS_PASSWORD")
+        redis_password = os.getenv("REDIS_PASSWORD")
         redis_host = os.getenv("REDIS_HOST")
         redis_port = os.getenv("REDIS_PORT")
         _database = redis.Redis(
             host=redis_host,
             port=redis_port,
-            password=password_redis_db
+            password=redis_password
             )
     return _database
 
